@@ -11,7 +11,8 @@ package mail2printgw;
 public class ImapAcc {
     public String url = null;
     public int    port = 0;
-    public String javaMailStoreName = null;
+    public String protocol = null;
+    public boolean useSTARTTLS = false;
     public String username = null;
     public String password = null;
 }

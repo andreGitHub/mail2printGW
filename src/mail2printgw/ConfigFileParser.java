@@ -208,8 +208,17 @@ public class ConfigFileParser {
                         tmpAcc.url = optionValue;
                     } else if(optionName.equalsIgnoreCase("port")){
                         tmpAcc.port = Integer.parseInt(optionValue);
-                    } else if(optionName.equalsIgnoreCase("javaMailStoreName")){
-                        tmpAcc.javaMailStoreName = optionValue;
+                    } else if(optionName.equalsIgnoreCase("protocol")){
+                        tmpAcc.protocol = optionValue;
+                    } else if(optionName.equalsIgnoreCase("useSTARTTLS")){
+                        if(optionValue.equalsIgnoreCase("true")){
+                            tmpAcc.useSTARTTLS = true;
+                        } else if(optionValue.equalsIgnoreCase("false")){
+                            tmpAcc.useSTARTTLS = false;
+                        } else {
+                            Logger.getLogger(ConfigFileParser.class.getName()).log(Level.SEVERE,
+                                "ERROR: wrong Syntax in config-File. \"" + optionValue + "\" is not a valid option for useSTARTTLS");
+                        }
                     } else if(optionName.equalsIgnoreCase("username")){
                         tmpAcc.username = optionValue;
                     } else if(optionName.equalsIgnoreCase("password")){

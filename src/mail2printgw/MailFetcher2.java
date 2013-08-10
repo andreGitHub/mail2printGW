@@ -22,9 +22,7 @@ import javax.mail.MessagingException;
 import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
-import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
-import sun.security.krb5.Config;
 
 /**
  *
@@ -56,34 +54,69 @@ public class MailFetcher2 {
             
             ImapAcc actAcc = (ImapAcc)imapAccs.get(key);
     
+            //set mail properties
             Properties props = new Properties();
-            //props.setProperty("mail.imap.starttls.enable", "true");
-            //props.put("mail.imap.starttls.enable", "true");
-        
-            /*
-            // Use SSL
-            prop.setProperty("mail.imap.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
-            prop.setProperty("mail.imap.socketFactory.fallback", "false");
-
-            // Use port 143
-            prop.setProperty("mail.imap.port", "143");
-            prop.setProperty("mail.imap.socketFactory.port", "143");
-            */
             
+            System.out.println("SSLCertificate: " + props.get("SSLCertificate"));
+            
+            props.put("mail.debug", "true");
+            props.put("mail.host", actAcc.url);
+            props.put("mail.user", actAcc.username);
+            //props.put("mail.transport.protocol", "smtp");
+            props.put("mail.store.protocol", actAcc.protocol);
+            
+            //Ports
+            props.put("mail.protocol.port", actAcc.port);
+            //props.put("mail.imap.port", actAcc.port);
+            //props.put("mail.imap.socketFactory.port", actAcc.port);
+            
+            if(actAcc.protocol.equals("imap")){
+                props.put("mail.imap.starttls.enable", true);
+            }
+            
+            //props.put("mail.debug", "false");
+            //props.put("mail.debug", "false");
+            //props.put("mail.debug", "false");
+            //props.put("mail.debug", "false");
             
             Session session = Session.getDefaultInstance(props, null);
-            session.setDebug(false);
+            //session.setDebug(false);
             Store store = null;
             try{
-                store = session.getStore(actAcc.javaMailStoreName);
+                //store = session.getStore(actAcc.javaMailStoreName);
+                store = session.getStore();
+                //System.out.println("DEBUG Store: " + store);
             } catch(NoSuchProviderException ex){
-                Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+                System.exit(1);
+            }
+            
+            if(store == null){
+                Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
+                        "unable to create a message store. the cause is a problem during retrieving the store from the session.");
+                System.exit(1);
+            }
+            
+            
+            try{
+                //System.out.println("try to connect to " + actAcc.username + "@"
+                //        + actAcc.url + ":" + actAcc.port);
+                store.connect(actAcc.url, actAcc.port, actAcc.username, actAcc.password);
+            } catch(MessagingException ex){
+                
+                
+                Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
+                        "May be there is a problem with certificates for the host.", ex);
+                System.exit(1);
+            }
+            
+            if(!store.isConnected()){
+                Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
+                        "unable to connect to mail-server \"" + actAcc.url + "\".");
+                System.exit(1);
             }
             
             try{
-                System.out.println("try to connect to " + actAcc.username + "@" + actAcc.url);
-                store.connect(actAcc.url, actAcc.username, actAcc.password);
-                
                 //System.out.println("getDefaultFolder()");
                 Folder f = store.getDefaultFolder();
                 if(f != null && f.exists()){
@@ -94,14 +127,23 @@ public class MailFetcher2 {
                         }
                     }
                 } else {
-                    Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE, 
+                    Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, 
                             "Can't find folders in account: " +
                             actAcc.username + "@" + actAcc.url);
+                    System.exit(1);
                 }
-                
+            } catch(MessagingException ex){
+                Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
+                        "problem during retrieving mails.", ex);
+                System.exit(1);
+            }
+            
+            try{
                 store.close();
             } catch(MessagingException ex){
-                Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
+                        "problem during logout.", ex);
+                System.exit(1);
             }
         }
         return ret;
@@ -159,28 +201,32 @@ public class MailFetcher2 {
                                     byte[] printableData = new byte[noAvail];
                                     b64ds.read(printableData, 0, noAvail);
                                     if(b64ds.available() != 0){
-                                        Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE,
+                                        Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
                                             getMessageInformation(actMsg) + "\n" +
                                             "BodyPart: " + i  + " - a problem during decoding occure.");
+                                        System.exit(1);
                                     } else {
                                         //decoding ok
                                         //go on prozessing, maybe safe to disk and put a fileitem in a list
                                         PrintItem pi = new PrintItem(fromAddr);
                                     }
                                 } else {
-                                    Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE,
+                                    Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
                                         getMessageInformation(actMsg) + "\n" +
                                         "BodyPart: " + i  + " - can't be decoded.");
+                                    System.exit(1);
                                 }
                             }
                         }
                     } else {
-                        Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE,
+                        Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
                              getMessageInformation(actMsg) + " - email data can't be parsed");
+                        System.exit(1);
                     }
                 } catch (IOException ex) {
-                    Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE,
+                    Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE,
                             getMessageInformation(actMsg) + " - email data can't be retrieved");
+                    System.exit(1);
                 }
                 
                 /*
@@ -204,7 +250,8 @@ public class MailFetcher2 {
                 }
             }
         } catch(MessagingException ex) {
-            Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
         }
         return ret;
     }
@@ -229,7 +276,8 @@ public class MailFetcher2 {
                 System.out.println("foldername: \"" + actFolder.getFullName() + "\"");
             }
         } catch(MessagingException ex) {
-            Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
         }
     }
     
@@ -252,8 +300,10 @@ public class MailFetcher2 {
             System.out.println("content:\n" + bp.getContent());
         } catch (MessagingException ex) {
             Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
         } catch (IOException ex){
             Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
         }
     }
     
@@ -274,6 +324,7 @@ public class MailFetcher2 {
                 }
             } catch (MessagingException ex) {
                 Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+                System.exit(1);
             }
         }
         return printable;
@@ -295,6 +346,7 @@ public class MailFetcher2 {
                     actMsg.getSubject();
         } catch (MessagingException ex) {
             Logger.getLogger(MailFetcher2.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
         }
         return ret;
     }
