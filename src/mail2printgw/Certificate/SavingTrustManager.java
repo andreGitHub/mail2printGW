@@ -1,4 +1,4 @@
-package trying_Out;
+package mail2printgw.Certificate;
 
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;

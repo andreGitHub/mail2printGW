@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package mail2printgw;
 
 import com.sun.mail.util.BASE64DecoderStream;
@@ -23,6 +19,7 @@ import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMultipart;
+import mail2printgw.Certificate.CertificateCheck;
 
 /**
  *
@@ -31,8 +28,7 @@ import javax.mail.internet.MimeMultipart;
 public class MailFetcher2 {
     private HashMap<Integer, ImapAcc> imapAccs
             = ConfigFileParser.getInstance().getImapAccs();
-    
-    //Logger.getLogger(MailFetcher.class.getName()).log(Level.SEVERE, null, ex);
+    private CertificateCheck cc = new CertificateCheck();
     
     public MailFetcher2() {
         
@@ -43,12 +39,6 @@ public class MailFetcher2 {
         
         Set<Integer> keys = imapAccs.keySet();
         for(Integer key: keys){
-            /*
-            if(key>1){
-                continue;
-            }
-            */
-             
             System.out.println("----------------------------------------\n"
                              + "----------------------------------------");
             
@@ -56,9 +46,6 @@ public class MailFetcher2 {
     
             //set mail properties
             Properties props = new Properties();
-            
-            System.out.println("SSLCertificate: " + props.get("SSLCertificate"));
-            
             props.put("mail.debug", "true");
             props.put("mail.host", actAcc.url);
             props.put("mail.user", actAcc.username);

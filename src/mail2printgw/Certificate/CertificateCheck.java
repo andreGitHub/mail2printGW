@@ -1,4 +1,4 @@
-package trying_Out;
+package mail2printgw.Certificate;
 
 
 import java.io.BufferedReader;
@@ -21,6 +21,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.SSLContext;
@@ -46,6 +48,7 @@ public class CertificateCheck {
     private KeyStore ks = null;
     private SavingTrustManager tm = null;
     private SSLSocketFactory sslSocketFactory = null;
+    private X509Certificate[] certChain = null;
     
     public CertificateCheck(){
         //initialize all needed stuff to retrieve certificates stored on this machine
@@ -73,6 +76,9 @@ public class CertificateCheck {
                     "Unable to find file, where certificates of this maschine are"
                     + " stored", new Exception());
         }
+        
+        //for test purpose
+        certificateStoreFile = new File("/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.25-2.3.12.3.fc19.i386/jre/lib/security/cacertsTEMP");
         
         //  read file, which store certificates
         FileInputStream fis = null;
@@ -145,16 +151,35 @@ public class CertificateCheck {
     }
     
     /**
+     * This method try to establish a ssl/tls connection to the given server. If
+     * a certificate for the server exist in the certificate store, the
+     * connection can be established.
+     * @param host host to connect to
+     * @param port port to connect to
+     * @return true if the connection can be established
+     *         false if the connection can not be established
+     */
+    public boolean hasValidCertificate(String host, int port){
+        if(hasValidCertificateByCommon(host, port)) {
+            return true;
+        }
+        if(hasValidCertificateBySTARTTLS(host, port)){
+            return true;
+        }
+        return false;
+    }
+    
+    /**
      * method can be used to test if an ssl/tls connection can be established in
      * the common way.
      * 
      * @param host hostname, to connect to
      * @param port port number of host to connect to
-     * @return true if it is possile to establish an ssl/tls - connection in the
-     *              common way
+     * @return X509Certificate-chain if it is possile to establish an ssl/tls -
+     *              connection in the common way
      *         false otherwise
      */
-    public boolean hasValidCertificate(String host, int port){
+    private boolean hasValidCertificateByCommon(String host, int port){
         return tryToEstablishSSLConnection(null, host, port);
     }
     
@@ -165,8 +190,8 @@ public class CertificateCheck {
      * 
      * @param host hostname, to connect to
      * @param port port number of host to connect to
-     * @return true if it is possile to establish an ssl/tls - connection in the
-     *              common way
+     * @return X509Certificate - chain if it is possile to establish an ssl/tls
+     *              - connection in the common way
      *         false otherwise
      */
     private boolean hasValidCertificateBySTARTTLS(String host, int port){
@@ -204,10 +229,14 @@ public class CertificateCheck {
                 String tmp = new String(read);
                 if(!tmp.contains("STARTTLS") && !tmp.contains("starttls")){
                     //server do not except STARTTLS - command
+                    //System.out.println("server does not support STARTTLS");
+                    this.certChain = null;
                     return false;
                 }
             } else {
                 //server does not respond to CAPABILITY command
+                //System.out.println("server does not respond to CAPABILITY - message");
+                this.certChain = null;
                 return false;
             }
             
@@ -226,15 +255,18 @@ public class CertificateCheck {
                 byte[] read = new byte[toRead];
                 is.read(read);
                 String tmp = new String(read);
-                if(!tmp.contains("OK") && !tmp.contains("ok")){
+                if(!(tmp.contains("OK") || tmp.contains("ok"))){
+                    //System.out.println("server not ready to start tls-session");
+                    this.certChain = null;
                     return false;
                 }
             }
             return tryToEstablishSSLConnection(sock, host, port);
         } catch (IOException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "IOException occured during direct communication with the"
-                    + " imap - server", ex);
+            //Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+            //        "IOException occured during direct communication with the"
+            //        + " imap - server", ex);
+            this.certChain = null;
             return false;
         }
     }
@@ -245,9 +277,9 @@ public class CertificateCheck {
      *             null, if a new socket should be created
      * @param host hostname, to connect to
      * @param port port number of host to connect to
-     * @return true if it is possile to establish an ssl/tls - connection in the
-     *              common way
-     *         false otherwise
+     * @return certificate-chain if it is possile to establish an ssl/tls -
+     *              connection in the common way
+     *         null otherwise
      */
     private boolean tryToEstablishSSLConnection(Socket sock, String host, int port){
         SSLSocket sslSocket = null;
@@ -260,6 +292,8 @@ public class CertificateCheck {
         } catch (IOException ex) {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
                     "unable to create ssl/tls socket", ex);
+            this.certChain = null;
+            return false;
         }
         try {
             sslSocket.setSoTimeout(10000);
@@ -272,15 +306,17 @@ public class CertificateCheck {
             sslSocket.close();
             
             //ssl/tls connection can be established
+            this.certChain = tm.getChain();
             return true;
         } catch (IOException ex) {
             //an ssl/tls handshake does not work
             //I dont have any glue how else to create an ssl/tls - connection
             //maybe it is simply not possible.
             
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "problem during SSL/TLS handshake to \"" + host +
-                    ":" + port + "\" occure. " + getCertificateError(), ex);
+            //Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+            //        "problem during SSL/TLS handshake to \"" + host +
+            //        ":" + port + "\" occure. " + getCertificateError(), ex);
+            this.certChain = tm.getChain();
             return false;
         }
     }
@@ -295,62 +331,52 @@ public class CertificateCheck {
      *         false otherwise (valid certificate already exist or no certificate can be retrieved from the server)
      */
     public boolean importCertificate(String host, int port){
-        final BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        if(hasValidCertificate(host, port)){
+        X509Certificate[] chain = null;
+        boolean connectSuccessful = hasValidCertificate(host, port);
+        if(connectSuccessful){
+            //a valid certificate for the given server:port exsisit in the keystore
+            //a new certificate dont need to be imported - nothing else to do
+            //System.out.println("1");
+            return false;
+        } else if(!connectSuccessful && this.certChain != null) {
+            //a connection can not be established because a valid certificate does
+            //not exist in certificate store. certificate need to be imported.
+            //System.out.println("2");
+            chain = this.certChain;
+        } else {
+            //a connection can not be established because a valid certificate does
+            //not exist in certificate store. but there are no certificates which
+            //can be imported in the certificate store.
+            //System.out.println("3");
             return false;
         }
         
-        read this method to figure out if it is right
         
-        X509Certificate[] chain = tm.getChain();
-        System.out.println();
-        System.out.println("Server sent " + chain.length + " certificate(s):");
-        System.out.println();
-        MessageDigest sha1 = null;
-        MessageDigest md5 = null;
-        try {
-            sha1 = MessageDigest.getInstance("SHA1");
-            md5 = MessageDigest.getInstance("MD5");
-        } catch (NoSuchAlgorithmException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+        
+        //get right certificate
+        X509Certificate certToStore = selectCert(chain, host);
+        if(certToStore == null){
+            return false;
         }
+        //System.out.println("issuerDN: " + certToStore.getIssuerDN().getName());
+        //System.out.println("subjectDN: " + certToStore.getSubjectDN().getName());
         
-        for (int i = 0; i < chain.length; i++) {
-            final X509Certificate cert = chain[i];
-            System.out.println(" " + (i + 1) + " Subject " + cert.getSubjectDN());
-            System.out.println("   Issuer  " + cert.getIssuerDN());
-            try {
-                sha1.update(cert.getEncoded());
-                System.out.println("   sha1    " + toHexString(sha1.digest()));
-                md5.update(cert.getEncoded());
-                System.out.println("   md5     " + toHexString(md5.digest()));
-                System.out.println();
-            } catch (CertificateEncodingException ex) {
-                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+        
+        
+        //get certificate number to store
+        int k = 0;
+        for(int j=0; k<chain.length; k++){
+            if(certToStore.equals(chain[j])){
+                k=j;
+                break;
             }
         }
- 
-        System.out.println("Enter certificate to add to trusted keystore"
-                + " or 'q' to quit: [1]");
-        String line = null;
-        try {
-            line = reader.readLine().trim();
-        } catch (IOException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
-        }
         
-        int k;
-        try {
-            k = (line.length() == 0) ? 0 : Integer.parseInt(line) - 1;
-        } catch (final NumberFormatException e) {
-            System.out.println("KeyStore not changed");
-            return false;
-        }
- 
-        final X509Certificate cert = chain[k];
+        
+        
         final String alias = host + "-" + (k + 1);
         try {
-            ks.setCertificateEntry(alias, cert);
+            ks.setCertificateEntry(alias, certToStore);
             OutputStream out = new FileOutputStream(certificateStoreFile);
             ks.store(out, passOfCertificates.toCharArray());
             out.close();
@@ -366,13 +392,161 @@ public class CertificateCheck {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
         }
         
-        System.out.println();
-        System.out.println(cert);
-        System.out.println();
-        System.out.println(
-                "Added certificate to keystore 'cacerts' using alias '"
-                        + alias + "'");
+        System.out.println("Added certificate to keystore 'cacerts' using alias '"
+                + alias + "'");
+        
+        return true;
     }
+    
+    
+    
+    /**
+     * return a certificate, which is not already in the certificate store and fit
+     * the host best
+     * @param chain certificate retrieved from the host
+     * @return certificate, which fit the host best
+     */
+    private X509Certificate selectCert(X509Certificate[] chain, String host){
+        //filter certificates
+        ArrayList<X509Certificate> unstoredCerts = new ArrayList<X509Certificate>();
+        for(int i = 0; i<chain.length; i++){
+            if(!isInCertStore(chain[i])){
+                //System.out.println("new cert: " + chain[i].getIssuerDN().getName());
+                unstoredCerts.add(chain[i]);
+            }
+        }
+        
+        
+        
+        //weight certs
+        int[] weights = new int[unstoredCerts.size()];
+        for(int i=0; i<unstoredCerts.size(); i++){
+            weights[i] = 0;
+            X509Certificate actC = unstoredCerts.get(i);
+            String issuerDN = actC.getIssuerDN().getName();
+            String[] issuerDNFields = issuerDN.split(",");
+            String subjectDN = actC.getSubjectDN().getName();
+            String[] subjectDNFields = subjectDN.split(",");
+            
+            //go through all issuerDN fields
+            for(int j=0; j<issuerDNFields.length; j++){
+                weights[i] = weights[i] + getWeight(host, issuerDNFields[j].trim().split("=")[1]);
+            }
+            
+            //go through all subjectDN fields
+            for(int j=0; j<subjectDNFields.length; j++){
+                weights[i] = weights[i] + getWeight(host, subjectDNFields[j].trim().split("=")[1]);
+            }
+        }
+        
+        
+        
+        //search highest weight
+        int high = 0;
+        X509Certificate cert = null;
+        for(int i=0; i<weights.length; i++){
+            if(high<weights[i]){
+                high = weights[i];
+                cert = unstoredCerts.get(i);
+            }
+        }
+        return cert;
+    }
+    
+    
+    
+    /**
+     * calculate if the value fits the hostname.
+     * @param host name of host
+     * @param value string which should fit the hostname
+     * @return number of parts that fit
+     */
+    private int getWeight(String host, String value){
+        if(value.contains("@")){
+            String[] tmp = value.split("@");
+            value = tmp[tmp.length-1];
+        }
+        int noOfCNDots = 0;
+        int dotsInHostName = countChars(".".toCharArray()[0], host.toCharArray());
+        int dotsInCN = countChars(".".toCharArray()[0], value.toCharArray());
+            
+        if(dotsInHostName<dotsInCN){
+            noOfCNDots = dotsInHostName;
+        } else {
+            noOfCNDots = dotsInCN;
+        }
+        
+        String[] partsHost = host.split("\\.");
+        String[] partsValue = value.split("\\.");
+        int j;
+        for(j = 0; j<=noOfCNDots; j++){
+            //System.out.println("host: " + host + "\nvalue: " + value + "\nnoDots: "
+            //        + noOfCNDots + "\nj: " + j + "\npartsHost.length: " + partsHost.length
+            //        + "\npartsValue.length: " + partsValue.length);
+            if(!(partsHost[(partsHost.length-1)-j].equals(partsValue[(partsValue.length-1)-j]))){
+                return j;
+            }
+        }
+        return j;
+    }
+    
+    
+    
+    /**
+     * count number of character c in string str.
+     * @param c character to count
+     * @param str string where to count
+     * @return times of the occurens of c in str
+     */
+    private int countChars(char c, char[] str){
+        int ret = 0;
+        for(int i = 0; i<str.length; i++){
+            if(str[i] == c){
+                ret++;
+            }
+        }
+        return ret;
+    }
+    
+    
+    
+    /**
+     * method used to search a certificate store for a special
+     * certificate manually.
+     * 
+     * @param cert certificate, which is searched in keystore.
+     * @return true if the certificate is already stored in the certificate store.
+     *         false otherwise
+     */
+    private boolean isInCertStore(X509Certificate cert){
+        Enumeration<String> aliases = null;
+        try {
+            aliases = ks.aliases();
+        } catch (KeyStoreException ex) {
+            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        if(aliases == null){
+            //aliases can not be retrieved from keystore
+            return false;
+        }
+        while(aliases.hasMoreElements()){
+            String alias = aliases.nextElement();
+            X509Certificate tmpCert = null;
+            try {
+                tmpCert = (X509Certificate)ks.getCertificate(alias);
+            } catch (KeyStoreException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                        "certificate can not be retrieved from keystore", ex);
+            }
+            if(tmpCert != null &&
+               tmpCert.getIssuerDN().getName().equals(cert.getIssuerDN().getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    
     
     /**
      * Simply return a long error-message needed more than once.
@@ -428,137 +602,114 @@ public class CertificateCheck {
         }
         return sb.toString();
     }
-
-    /*
-    /**
-     * untested code. method used to search a certificate store for a special
-     * certificate manually.
-     */
-    /*
-    private void searchCertificateStore(){
-        /*
-        X509Certificate[] chain = tm.getChain();
-        if (chain == null) {
-            System.out.println("Could not obtain server certificate chain");
-            return false;
-        }
-        
-        boolean anyValidCertificate = false;
-        for(int i = 0; i < chain.length; i++){
-            Enumeration<String> aliases = null;
-            try {
-                aliases = ks.aliases();
-            } catch (KeyStoreException ex) {
-                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
-            }
-            
-            while(aliases.hasMoreElements()){
-                String alias = aliases.nextElement();
-                X509Certificate cert = null;
-                try {
-                    cert = (X509Certificate)ks.getCertificate(alias);
-                } catch (KeyStoreException ex) {
-                    Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
-                }
-                if(cert != null){
-                    if(cert.getIssuerDN().getName().equals(chain[i].getIssuerDN().getName())) {
-                        anyValidCertificate = true;
-                    }
-                } else {
-                    Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                            "problem with retriefing cert from keystore");
-                }
-            }
-        }
-        
-        if(anyValidCertificate == true){
-            return true;
-        } else {
-            return false;
-        }
-    }
-    */
+    
+    
     
     //only for test purpose
-    private void createCertificateStoreBackup(){
+    private static void createCertificateStoreBackup(){
         //  find file where certificates are stored
         //first location
         File certificateStoreFileORIGINAL = new File("jssecacerts");
-        if (certificateStoreFileORIGINAL.isFile()) {
-            File certificateStoreFileBACKUP = new File("jssecacertsBACKUP");
-            copyFromTo(certificateStoreFileORIGINAL, certificateStoreFileBACKUP);
-        }
+        File certificateStoreFileBACKUP = new File("jssecacertsBACKUP");
+        copyFromTo(certificateStoreFileORIGINAL, certificateStoreFileBACKUP);
         
-        
+
         
         //second location
         final char SEP = File.separatorChar;
         final File dir = new File(System.getProperty("java.home")
                     + SEP + "lib" + SEP + "security");
         certificateStoreFileORIGINAL = new File(dir, "jssecacerts");
-        if (certificateStoreFileORIGINAL.isFile()) {
-            File certificateStoreFileBACKUP = new File(dir, "jssecacertsBACKUP");
-            copyFromTo(certificateStoreFileORIGINAL, certificateStoreFileBACKUP);
-        }
+        certificateStoreFileBACKUP = new File(dir, "jssecacertsBACKUP");
+        copyFromTo(certificateStoreFileORIGINAL, certificateStoreFileBACKUP);
         
         
         
         //third location
         certificateStoreFileORIGINAL = new File(dir, "cacerts");
-        if (certificateStoreFileORIGINAL.isFile()) {
-            File certificateStoreFileBACKUP = new File(dir, "cacertsBACKUP");
-            copyFromTo(certificateStoreFileORIGINAL, certificateStoreFileBACKUP);
-        }
+        certificateStoreFileBACKUP = new File(dir, "cacertsBACKUP");
+        copyFromTo(certificateStoreFileORIGINAL, certificateStoreFileBACKUP);
     }
     
     //only for test purpose
-    private boolean copyFromTo(File from, File to){
-        if(to.exists()){
-            System.out.println("\" " + to.getAbsolutePath() + "\" already exists."
-                    + " Unable to create backup.");
-            return false;
+    private static void restoreCertificateStoreFromBackup(){
+        //first location
+        File certificateStoreFileBACKUP = new File("jssecacertsBACKUP");
+        File certificateStoreFileORIGINAL = new File("jssecacerts");
+        copyFromTo(certificateStoreFileBACKUP, certificateStoreFileORIGINAL);
+     
+        
+        
+        //second location
+        final char SEP = File.separatorChar;
+        final File dir = new File(System.getProperty("java.home")
+                    + SEP + "lib" + SEP + "security");
+        certificateStoreFileBACKUP = new File(dir, "jssecacertsBACKUP");
+        certificateStoreFileORIGINAL = new File(dir, "jssecacerts");
+        copyFromTo(certificateStoreFileBACKUP, certificateStoreFileORIGINAL);
+        
+        
+        
+        //third location
+        certificateStoreFileBACKUP = new File(dir, "cacertsBACKUP");
+        certificateStoreFileORIGINAL = new File(dir, "cacerts");
+        copyFromTo(certificateStoreFileBACKUP, certificateStoreFileORIGINAL);
+    }
+    
+    //only for test purpose
+    private static boolean copyFromTo(File from, File to){
+        if (from.exists() && from.isFile() && to.exists() && to.isFile() && to.canWrite()) {
+            FileInputStream fis = null;
+            FileOutputStream fos = null;
+            try {
+                fis = new FileInputStream(from);
+                fos = new FileOutputStream(to);
+                int len = fis.available();
+                byte[] buf = new byte[len];
+                fis.read(buf);
+                fos.write(buf);
+                fos.flush();
+                
+                fis.close();
+                fos.close();
+                return true;
+            } catch (IOException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+                return false;
+            }
         } else {
-            System.out.println("create backup of file \"" + from.getAbsolutePath() + "\"");
-        }
-        try {
-            to.createNewFile();
-                
-            FileInputStream fis = new FileInputStream(from);
-            FileOutputStream fos = new FileOutputStream(to);
-                
-            byte[] buf = new byte[fis.available()];
-            fis.read(buf);
-            fos.write(buf);
-                
-            fis.close();
-            fos.close();
-        } catch (IOException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            if(from.exists() && from.isFile()){
+                System.out.println("\"" + from.getAbsolutePath() + "\" can not be processed.");
+                if(!to.exists() || !to.isFile()){
+                    System.out.println("\"" + to.getAbsolutePath() + "\" does not "
+                            + "exist. Thats the reason why the file can not be writtten. "
+                            + "To solve the problem create the file and give write "
+                            + "access to the user \"" + System.getProperty("user.name") + "\"");
+                } else if(!to.canWrite()){
+                    System.out.println("\"" + System.getProperty("user.name")
+                            + "\" can not get write access to the file \""
+                            + to.getAbsolutePath() + "\". Cange access writes "
+                            + "to solve the problem.");
+                }
+            }
             return false;
         }
-        return true;
     }
     
     //only for test purpose
     public static void main(String args[]) {
+        //createCertificateStoreBackup();
+        //restoreCertificateStoreFromBackup();
+        
         CertificateCheck cc = new CertificateCheck();
         
         String host = null;
         int port = -1;
         boolean ret;
+        
         /*
-        String host = "www.google.com";
-        int port = 443;
-        boolean ret = cc.hasValidCertificate(host, port);
-        if(ret){
-            System.out.println("a valid ssl/tls connection to \"" + host + ":" + port + "\" can be created.");
-        } else {
-            System.out.println("There is no certificate for \"" + host + ":" + port + "\".");
-        }
-        */
-        /*
-        host = "mail.net.t-labs.tu-berlin.de";
-        port = 143;
+        host = "www.google.com";
+        port = 443;
         ret = cc.hasValidCertificate(host, port);
         if(ret){
             System.out.println("a valid ssl/tls connection to \"" + host + ":" + port + "\" can be created.");
@@ -569,76 +720,20 @@ public class CertificateCheck {
         
         host = "mail.net.t-labs.tu-berlin.de";
         port = 143;
-        cc.hasValidCertificateBySTARTTLS(host, port);
-        
+        ret = cc.hasValidCertificate(host, port);
+        if(ret){
+            System.out.println("a valid ssl/tls connection to \"" + host + ":" + port + "\" can be created.");
+        } else {
+            System.out.println("There is no certificate for \"" + host + ":" + port + "\".");
+            while(!cc.hasValidCertificate(host, port)){
+                ret = cc.importCertificate(host, port);
+                if(!ret){
+                    System.out.println("no certificate imported");
+                } else {
+                    System.out.println("certificate imported");
+                }
+                cc = new CertificateCheck();
+            }
+        }
     }
-    
-    /*
-    private void storeNewCertificates(){
-        System.out.println("print aliases");
-        Enumeration<String> aliases = null;
-        try {
-            aliases = ks.aliases();
-        } catch (KeyStoreException ex) {
-            Logger.getLogger(Certificate_check.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        
-        while(aliases.hasMoreElements()){
-            String alias = aliases.nextElement();
-            System.out.println("Next aliases: " + alias);
-        }
-        System.out.println("end aliases");
-        */
-        
-        
-        
-        
-        /*
-                final BufferedReader reader =
-                new BufferedReader(new InputStreamReader(System.in));
- 
-        System.out.println();
-        System.out.println("Server sent " + chain.length + " certificate(s):");
-        System.out.println();
-        final MessageDigest sha1 = MessageDigest.getInstance("SHA1");
-        final MessageDigest md5 = MessageDigest.getInstance("MD5");
-        for (int i = 0; i < chain.length; i++) {
-            final X509Certificate cert = chain[i];
-            System.out.println(" " + (i + 1) + " Subject "
-                    + cert.getSubjectDN());
-            System.out.println("   Issuer  " + cert.getIssuerDN());
-            sha1.update(cert.getEncoded());
-            System.out.println("   sha1    " + toHexString(sha1.digest()));
-            md5.update(cert.getEncoded());
-            System.out.println("   md5     " + toHexString(md5.digest()));
-            System.out.println();
-        }
- 
-        System.out.println("Enter certificate to add to trusted keystore"
-                + " or 'q' to quit: [1]");
-        final String line = reader.readLine().trim();
-        int k;
-        try {
-            k = (line.length() == 0) ? 0 : Integer.parseInt(line) - 1;
-        } catch (final NumberFormatException e) {
-            System.out.println("KeyStore not changed");
-            return;
-        }
- 
-        final X509Certificate cert = chain[k];
-        final String alias = host + "-" + (k + 1);
-        ks.setCertificateEntry(alias, cert);
- 
-        final OutputStream out = new FileOutputStream(file);
-        ks.store(out, passphrase);
-        out.close();
- 
-        System.out.println();
-        System.out.println(cert);
-        System.out.println();
-        System.out.println(
-                "Added certificate to keystore 'cacerts' using alias '"
-                        + alias + "'");
-    }
-    */
 }
