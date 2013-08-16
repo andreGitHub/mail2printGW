@@ -1,3 +1,22 @@
+   /*
+    * Copyright 2013 André Schütze
+    * 
+    * This file is part of mail2printGW.
+    * 
+    * Mail2printGW is free software: you can redistribute it and/or modify
+    * it under the terms of the GNU General Public License as published by
+    * the Free Software Foundation, either version 3 of the License, or
+    * (at your option) any later version.
+    * 
+    * Mail2printGW is distributed in the hope that it will be useful,
+    * but WITHOUT ANY WARRANTY; without even the implied warranty of
+    * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    * GNU General Public License for more details.
+    * 
+    * You should have received a copy of the GNU General Public License
+    * along with mail2printGW.  If not, see <http://www.gnu.org/licenses/>.
+    */
+
 package mail2printgw;
 
 import com.sun.mail.util.BASE64DecoderStream;
@@ -45,7 +64,7 @@ public class MailFetcher2 {
             ImapAcc actAcc = (ImapAcc)imapAccs.get(key);
     
             //set mail properties
-            Properties props = new Properties();
+            Properties props = System.getProperties();
             props.put("mail.debug", "true");
             props.put("mail.host", actAcc.url);
             props.put("mail.user", actAcc.username);

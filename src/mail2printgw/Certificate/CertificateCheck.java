@@ -1,14 +1,31 @@
+   /*
+    * Copyright 2013 André Schütze
+    * 
+    * This file is part of mail2printGW.
+    * 
+    * Mail2printGW is free software: you can redistribute it and/or modify
+    * it under the terms of the GNU General Public License as published by
+    * the Free Software Foundation, either version 3 of the License, or
+    * (at your option) any later version.
+    * 
+    * Mail2printGW is distributed in the hope that it will be useful,
+    * but WITHOUT ANY WARRANTY; without even the implied warranty of
+    * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    * GNU General Public License for more details.
+    * 
+    * You should have received a copy of the GNU General Public License
+    * along with mail2printGW.  If not, see <http://www.gnu.org/licenses/>.
+    */
+
 package mail2printgw.Certificate;
 
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketException;
@@ -16,9 +33,7 @@ import java.net.UnknownHostException;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -50,69 +65,25 @@ public class CertificateCheck {
     private SSLSocketFactory sslSocketFactory = null;
     private X509Certificate[] certChain = null;
     
-    public CertificateCheck(){
+    private void initCertificateCheck(){
+        certificateStoreFile = null;
+        ks = null;
+        tm = null;
+        sslSocketFactory = null;
+        certChain = null;
+        
+        
         //initialize all needed stuff to retrieve certificates stored on this machine
-        //  create keystore
-        try {
-            ks = KeyStore.getInstance(KeyStore.getDefaultType());
-        } catch (KeyStoreException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "Unable to load certificates of this maschine", ex);
-        }
- 
-        //  find file where certificates are stored
-        certificateStoreFile = new File("jssecacerts");
-        if (certificateStoreFile.isFile() == false) {
-            final char SEP = File.separatorChar;
-            final File dir = new File(System.getProperty("java.home")
-                    + SEP + "lib" + SEP + "security");
-            certificateStoreFile = new File(dir, "jssecacerts");
-            if (certificateStoreFile.isFile() == false) {
-                certificateStoreFile = new File(dir, "cacerts");
-            }
-        }
-        if(!certificateStoreFile.isFile()){
+        //find file which store certificates
+        certificateStoreFile = getCertificateStoreFile();
+        if(certificateStoreFile == null){
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
                     "Unable to find file, where certificates of this maschine are"
                     + " stored", new Exception());
+            certificateStoreFile = new File("temporaryCertificateFile");
         }
         
-        //for test purpose
-        certificateStoreFile = new File("/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.25-2.3.12.3.fc19.i386/jre/lib/security/cacertsTEMP");
-        
-        //  read file, which store certificates
-        FileInputStream fis = null;
-        try {
-            fis = new FileInputStream(certificateStoreFile);
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "unable to create a file input stream to file at the location \""
-                    + certificateStoreFile.getAbsolutePath() + "\" which store certificates.", ex);
-        }
-        try {
-            ks.load(fis, passOfCertificates.toCharArray());
-        } catch (IOException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "unable to read file \"" + certificateStoreFile.getAbsolutePath() + "\"", ex);
-        } catch (NoSuchAlgorithmException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "unable to decrypt certificates stored in file \"" +
-                    certificateStoreFile.getAbsolutePath() + "\"", ex);
-        } catch (CertificateException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "unable to load certificates from file. maybe another password"
-                    + " than the default ("+ passOfCertificates + ") password is"
-                    + " used.", ex);
-        }
-        try {
-            fis.close();
-        } catch (IOException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "unable to close the file input stream to the file at the location \""
-                    + certificateStoreFile.getAbsolutePath() + "\" which store certificates.", ex);
-        }
-        
-        
+        ks = initKeystore();
         
         
         
@@ -150,6 +121,125 @@ public class CertificateCheck {
         sslSocketFactory = context.getSocketFactory();
     }
     
+    private KeyStore initKeystore(){
+        //  create keystore
+        KeyStore ret = null;
+        try {
+            ret = KeyStore.getInstance(KeyStore.getDefaultType());
+        } catch (KeyStoreException ex) {
+            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                    "Unable to load certificates of this maschine", ex);
+        }
+        
+        
+        
+        if(certificateStoreFile.length()>0){
+            //  read file, which store certificates
+            FileInputStream fis = null;
+            try {
+                fis = new FileInputStream(certificateStoreFile);
+            } catch (FileNotFoundException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                        "unable to create a file input stream to file at the location \""
+                        + certificateStoreFile.getAbsolutePath() + "\" which store certificates.", ex);
+            }
+            try {
+                ret.load(fis, passOfCertificates.toCharArray());
+            } catch (IOException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                        "unable to read file \"" + certificateStoreFile.getAbsolutePath() + "\"", ex);
+            } catch (NoSuchAlgorithmException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                        "unable to decrypt certificates stored in file \"" +
+                        certificateStoreFile.getAbsolutePath() + "\"", ex);
+            } catch (CertificateException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                        "unable to load certificates from file. maybe another password"
+                        + " than the default ("+ passOfCertificates + ") password is"
+                        + " used.", ex);
+            }
+            try {
+                fis.close();
+            } catch (IOException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                        "unable to close the file input stream to the file at the location \""
+                        + certificateStoreFile.getAbsolutePath() + "\" which store certificates.", ex);
+            }
+        } else {
+            try {
+                ret.load(null, passOfCertificates.toCharArray());
+            } catch (IOException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (NoSuchAlgorithmException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (CertificateException ex) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        
+        return ret;
+    }
+    
+    private File getCertificateStoreFile(){
+        File ret = null;
+        //System.setProperty("javax.net.ssl.keyStore", "falsch");
+        //System.setProperty("javax.net.ssl.trustStore", "falsch");
+        //check system first property
+        if(System.getProperties().containsKey("javax.net.ssl.keyStore")){
+            String path = (String)System.getProperties().get("javax.net.ssl.keyStore");
+            //System.out.println("path of cert file: " + path);
+            ret = new File(path);
+        }
+        //check second systemproperty if first one does not exist
+        if( System.getProperties().containsKey("javax.net.ssl.trustStore")
+            &&
+            (
+                ret == null
+                ||
+                (
+                    ret != null
+                    &&
+                    !(
+                        ret.exists() && ret.isFile() && ret.canRead()
+                    )
+                )
+            )
+          ){
+            String path = (String)System.getProperties().get("javax.net.ssl.trustStore");
+            //System.out.println("path of cert file: " + path);
+            ret = new File(path);
+        }
+        //try to find file with certificates at default lication
+        if( ret == null
+            ||
+            (
+                ret != null && !(ret.exists() && ret.isFile() && ret.canRead())
+            )
+          ){
+            
+            //  find file where certificates are stored
+            ret = new File("jssecacerts");
+            if (!(ret.exists() && ret.isFile() && ret.canRead())) {
+                final char SEP = File.separatorChar;
+                final File dir = new File(System.getProperty("java.home")
+                        + SEP + "lib" + SEP + "security");
+                ret = new File(dir, "jssecacerts");
+                if (!(ret.exists() && ret.isFile() && ret.canRead())) {
+                    ret = new File(dir, "cacerts");
+                    if(!(ret.exists() && ret.isFile() && ret.canRead())){
+                        ret = null;
+                    }
+                }
+            }
+        }
+        return ret;
+    }
+    
+    public CertificateCheck(){
+        initCertificateCheck();
+        //System.out.println("path: " + certificateStoreFile.getAbsolutePath());
+    }
+    
     /**
      * This method try to establish a ssl/tls connection to the given server. If
      * a certificate for the server exist in the certificate store, the
@@ -160,12 +250,16 @@ public class CertificateCheck {
      *         false if the connection can not be established
      */
     public boolean hasValidCertificate(String host, int port){
+        certChain = null;
         if(hasValidCertificateByCommon(host, port)) {
+            //System.out.println("has valid cert by common");
             return true;
         }
-        if(hasValidCertificateBySTARTTLS(host, port)){
+        if(certChain == null && hasValidCertificateBySTARTTLS(host, port)){
+            //System.out.println("has valid cert by STARTTLS");
             return true;
         }
+        //System.out.println("does not has valid cert");
         return false;
     }
     
@@ -356,6 +450,7 @@ public class CertificateCheck {
         //get right certificate
         X509Certificate certToStore = selectCert(chain, host);
         if(certToStore == null){
+            System.out.println("4");
             return false;
         }
         //System.out.println("issuerDN: " + certToStore.getIssuerDN().getName());
@@ -363,7 +458,7 @@ public class CertificateCheck {
         
         
         
-        //get certificate number to store
+        //get certificate number which should be stored
         int k = 0;
         for(int j=0; k<chain.length; k++){
             if(certToStore.equals(chain[j])){
@@ -377,6 +472,7 @@ public class CertificateCheck {
         final String alias = host + "-" + (k + 1);
         try {
             ks.setCertificateEntry(alias, certToStore);
+            //System.out.println("path to file, where certificate is stored: " + certificateStoreFile);
             OutputStream out = new FileOutputStream(certificateStoreFile);
             ks.store(out, passOfCertificates.toCharArray());
             out.close();
@@ -392,9 +488,10 @@ public class CertificateCheck {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
         }
         
-        System.out.println("Added certificate to keystore 'cacerts' using alias '"
-                + alias + "'");
-        
+        //System.out.println("Added certificate to keystore '" + certificateStoreFile.getName()
+        //        + "' using alias '" + alias + "'");
+
+        initCertificateCheck();
         return true;
     }
     
@@ -521,6 +618,11 @@ public class CertificateCheck {
     private boolean isInCertStore(X509Certificate cert){
         Enumeration<String> aliases = null;
         try {
+            if(ks == null || (ks != null && ks.size() == 0)){
+                //System.out.println("keystore empty");
+                return false;
+            }
+            
             aliases = ks.aliases();
         } catch (KeyStoreException ex) {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
@@ -717,7 +819,7 @@ public class CertificateCheck {
             System.out.println("There is no certificate for \"" + host + ":" + port + "\".");
         }
         */
-        
+        /*
         host = "mail.net.t-labs.tu-berlin.de";
         port = 143;
         ret = cc.hasValidCertificate(host, port);
@@ -735,5 +837,6 @@ public class CertificateCheck {
                 cc = new CertificateCheck();
             }
         }
+        */
     }
 }
