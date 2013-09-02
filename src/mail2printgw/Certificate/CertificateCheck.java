@@ -65,6 +65,11 @@ public class CertificateCheck {
     private SSLSocketFactory sslSocketFactory = null;
     private X509Certificate[] certChain = null;
     
+    private void initCertificateCheckForCertProbe(){
+        initTrustManager();
+        initSSLContextAndSocketFactory();
+    }
+    
     private void initCertificateCheck(){
         certificateStoreFile = null;
         ks = null;
@@ -85,8 +90,11 @@ public class CertificateCheck {
         
         ks = initKeystore();
         
-        
-        
+        initTrustManager();
+        initSSLContextAndSocketFactory();
+    }
+    
+    private void initTrustManager(){
         //initialise sslSocketFactory
         //1. create trustManagerFactory to get savingTrustManager
         TrustManagerFactory tmf = null;
@@ -105,6 +113,9 @@ public class CertificateCheck {
         //2. create savingTrustManager to create sslContext
         X509TrustManager dtm = (X509TrustManager)tmf.getTrustManagers()[0];
         tm = new SavingTrustManager(dtm);
+    }
+    
+    private void initSSLContextAndSocketFactory(){
         //3. create sslContext to create sslSocketFactory
         SSLContext context = null;
         try {
@@ -190,6 +201,7 @@ public class CertificateCheck {
             //System.out.println("path of cert file: " + path);
             ret = new File(path);
         }
+        //System.out.println("path of cert file: " + ret.getAbsolutePath());
         //check second systemproperty if first one does not exist
         if( System.getProperties().containsKey("javax.net.ssl.trustStore")
             &&
@@ -209,6 +221,7 @@ public class CertificateCheck {
             //System.out.println("path of cert file: " + path);
             ret = new File(path);
         }
+        //System.out.println("path of cert file: " + ret.getAbsolutePath());
         //try to find file with certificates at default lication
         if( ret == null
             ||
@@ -232,6 +245,7 @@ public class CertificateCheck {
                 }
             }
         }
+        //System.out.println("path of cert file: " + ret.getAbsolutePath());
         return ret;
     }
     
@@ -249,17 +263,20 @@ public class CertificateCheck {
      * @return true if the connection can be established
      *         false if the connection can not be established
      */
-    public boolean hasValidCertificate(String host, int port){
+    public boolean hasValidCertificate(String host, int port, boolean useSTARTTLS){
+        initCertificateCheckForCertProbe();
+        //System.out.println("cc ---------------------- certChain = " + certChain);
         certChain = null;
+        //System.out.println("cc ---------------------- certChain = " + certChain);
         if(hasValidCertificateByCommon(host, port)) {
-            //System.out.println("has valid cert by common");
+            //System.out.println("cc - has valid cert by common. certChain = " + certChain);
             return true;
         }
-        if(certChain == null && hasValidCertificateBySTARTTLS(host, port)){
-            //System.out.println("has valid cert by STARTTLS");
+        if(useSTARTTLS && certChain == null && hasValidCertificateBySTARTTLS(host, port)){
+            //System.out.println("cc - has valid cert by STARTTLS. certChain = " + certChain);
             return true;
         }
-        //System.out.println("does not has valid cert");
+        //System.out.println("cc - does not has valid cert. certChain = " + certChain);
         return false;
     }
     
@@ -274,6 +291,7 @@ public class CertificateCheck {
      *         false otherwise
      */
     private boolean hasValidCertificateByCommon(String host, int port){
+        //System.out.println("cc - hasValidCertificateByCommon. certChain = " + certChain);
         return tryToEstablishSSLConnection(null, host, port);
     }
     
@@ -289,6 +307,7 @@ public class CertificateCheck {
      *         false otherwise
      */
     private boolean hasValidCertificateBySTARTTLS(String host, int port){
+        //System.out.println("cc - hasValidCertificateBySTARTTLS. certChain = " + certChain);
         Socket sock = null;
         try {
             sock = new Socket(host, port);
@@ -323,13 +342,13 @@ public class CertificateCheck {
                 String tmp = new String(read);
                 if(!tmp.contains("STARTTLS") && !tmp.contains("starttls")){
                     //server do not except STARTTLS - command
-                    //System.out.println("server does not support STARTTLS");
+                    System.out.println("server does not support STARTTLS");
                     this.certChain = null;
                     return false;
                 }
             } else {
                 //server does not respond to CAPABILITY command
-                //System.out.println("server does not respond to CAPABILITY - message");
+                System.out.println("server does not respond to CAPABILITY - message");
                 this.certChain = null;
                 return false;
             }
@@ -350,7 +369,7 @@ public class CertificateCheck {
                 is.read(read);
                 String tmp = new String(read);
                 if(!(tmp.contains("OK") || tmp.contains("ok"))){
-                    //System.out.println("server not ready to start tls-session");
+                    System.out.println("server not ready to start tls-session");
                     this.certChain = null;
                     return false;
                 }
@@ -400,9 +419,15 @@ public class CertificateCheck {
             sslSocket.close();
             
             //ssl/tls connection can be established
+            
             this.certChain = tm.getChain();
+            //System.out.println("cc - ssl/tls handshake work. certChain = " + certChain);
             return true;
         } catch (IOException ex) {
+            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+                    "unable to create ssl/tls socket", ex);
+            //ex.printStackTrace();
+            
             //an ssl/tls handshake does not work
             //I dont have any glue how else to create an ssl/tls - connection
             //maybe it is simply not possible.
@@ -410,7 +435,9 @@ public class CertificateCheck {
             //Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
             //        "problem during SSL/TLS handshake to \"" + host +
             //        ":" + port + "\" occure. " + getCertificateError(), ex);
+            
             this.certChain = tm.getChain();
+            //System.out.println("cc - ssl/tls handshake does not work. certChain = " + certChain);
             return false;
         }
     }
@@ -424,9 +451,9 @@ public class CertificateCheck {
      * @return true if a new certificate was stored in the certificate store
      *         false otherwise (valid certificate already exist or no certificate can be retrieved from the server)
      */
-    public boolean importCertificate(String host, int port){
+    public boolean importCertificate(String host, int port, boolean useSTARTTLS){
         X509Certificate[] chain = null;
-        boolean connectSuccessful = hasValidCertificate(host, port);
+        boolean connectSuccessful = hasValidCertificate(host, port, useSTARTTLS);
         if(connectSuccessful){
             //a valid certificate for the given server:port exsisit in the keystore
             //a new certificate dont need to be imported - nothing else to do
@@ -450,7 +477,7 @@ public class CertificateCheck {
         //get right certificate
         X509Certificate certToStore = selectCert(chain, host);
         if(certToStore == null){
-            System.out.println("4");
+            //System.out.println("4");
             return false;
         }
         //System.out.println("issuerDN: " + certToStore.getIssuerDN().getName());
@@ -472,7 +499,7 @@ public class CertificateCheck {
         final String alias = host + "-" + (k + 1);
         try {
             ks.setCertificateEntry(alias, certToStore);
-            //System.out.println("path to file, where certificate is stored: " + certificateStoreFile);
+            //System.out.println("5");
             OutputStream out = new FileOutputStream(certificateStoreFile);
             ks.store(out, passOfCertificates.toCharArray());
             out.close();
@@ -492,6 +519,8 @@ public class CertificateCheck {
         //        + "' using alias '" + alias + "'");
 
         initCertificateCheck();
+        
+        //System.out.println("6");
         return true;
     }
     
@@ -521,12 +550,14 @@ public class CertificateCheck {
             weights[i] = 0;
             X509Certificate actC = unstoredCerts.get(i);
             String issuerDN = actC.getIssuerDN().getName();
-            String[] issuerDNFields = issuerDN.split(",");
+            String[] issuerDNFields = getDNFileds(issuerDN);
             String subjectDN = actC.getSubjectDN().getName();
-            String[] subjectDNFields = subjectDN.split(",");
+            String[] subjectDNFields = getDNFileds(subjectDN);
             
             //go through all issuerDN fields
+            //System.out.println("issuerDN: " + issuerDN);
             for(int j=0; j<issuerDNFields.length; j++){
+                //System.out.println("issuerDNField[" + j + "]: " + issuerDNFields[j]);
                 weights[i] = weights[i] + getWeight(host, issuerDNFields[j].trim().split("=")[1]);
             }
             
@@ -548,6 +579,38 @@ public class CertificateCheck {
             }
         }
         return cert;
+    }
+    
+    /**
+     * this method gets a string including fields separated by "," and convert
+     * it to String[] with the separated fields inside. It works like
+     * string.split(",") but it does not cut in parts of the string which look
+     * like this: "string,string"
+     * @param parm string with fields look like this string,string,string,"string,string",string
+     * @return array of separated stings
+     */
+    private String[] getDNFileds(String parm){
+        ArrayList<String> tmp = new ArrayList<String>();
+        boolean hypenOpen = false;
+        int begin = 0;
+        for(int i = 0; i<parm.length(); i++){
+            char c = parm.charAt(i);
+            if(c == "\"".charAt(0)){
+                hypenOpen = !hypenOpen;
+            }
+            if(!hypenOpen && c == ",".charAt(0)){
+                tmp.add(parm.substring(begin, i));
+                //System.out.println("field: >" + parm.substring(begin, i) + "<");
+                begin=i+2;
+            }
+        }
+        String[] ret = new String[tmp.size()];
+        int i = 0;
+        for(String s : tmp) {
+            ret[i] = s;
+            i++;
+        }
+        return ret;
     }
     
     
