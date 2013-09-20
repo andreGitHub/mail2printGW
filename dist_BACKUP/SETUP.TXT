@@ -1,0 +1,26 @@
+to run the program once, execute the command:
+> java -jar <path to jar-file>
+
+
+
+Steps to do to install the program on a plain ubuntu 12.10 system:
+
+1. Install java:
+	sudo apt-get install openjdk-7-jre
+
+2. Create the following directory structure:
+	<program-folder>
+	|- lib
+	   |- javax.mail.jar
+	   |- javax.persistence_2.1.0.v201304241213.jar
+	|- mail2printGW.jar
+	|- gw.conf						<- should be there
+	|- mail2PrintGW_error.log				<- will be created automatically
+
+3. Set the programm as a cron job:
+	3.1 Log in as the user $USER, which should run the program.
+	3.2 run command to edit cronjobs
+		> crontab -e
+	3.3 insert the line:
+		"0-59/3 * * * * java -jar <path to mail2printGW.jar>"
+	    to run the program in a 3 minute interval.

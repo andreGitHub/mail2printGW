@@ -23,17 +23,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.mail.MessagingException;
-import javax.mail.NoSuchProviderException;
-import javax.mail.Session;
-import javax.mail.Store;
 import mail2printgw.Certificate.CertificateCheck;
-import mail2printgw.ConfigFileParser;
-import mail2printgw.ImapAcc;
-import mail2printgw.MailFetcher2;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -48,10 +40,7 @@ import static org.junit.Assert.*;
 public class TestCertificateCheck {
     private String pathToCertificateFile = "/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.25-2.3.12.3.fc19.i386/jre/lib/security/cacertsTEMP";
     public TestCertificateCheck() {
-        //System.out.println("constructor");
-        System.setProperty("javax.net.ssl.keyStore", pathToCertificateFile);
-        //System.setProperty("javax.net.ssl.trustStore", "falsch");
-        clearFile(pathToCertificateFile);
+        
 
          
     }
@@ -80,7 +69,11 @@ public class TestCertificateCheck {
     
     @Before
     public void setUp() {
-        //System.out.println("setUp");
+        System.out.println("-- tcc - setUp");
+        //System.out.println("constructor");
+        System.setProperty("javax.net.ssl.keyStore", pathToCertificateFile);
+        //System.setProperty("javax.net.ssl.trustStore", "falsch");
+        clearFile(pathToCertificateFile);
     }
     
     @After
@@ -90,70 +83,124 @@ public class TestCertificateCheck {
     }
     
     @Test
-    public void connectToHostWithNoCertificateImapCommon(){
-        clearFile(pathToCertificateFile);
+    public void connectToLdapsHost() {
+        //ssh -L 636:intserv-new.net.t-labs.tu-berlin.de:636 -l aschuetze roadrunner.net.t-labs.tu-berlin.de
+        System.out.println("-- tcc - connectToLdapsHost");
         CertificateCheck cc = new CertificateCheck();
-        assertFalse(cc.hasValidCertificate("www.google.de", 443));
+        
+        boolean ret = cc.hasValidCertificate("127.0.0.1", 636, false);
+        assertFalse(ret);
+        ret = cc.importCertificate("127.0.0.1", 636, false);
+        assertTrue(ret);
+        assertFalse(cc.importCertificate("127.0.0.1", 636, false));
+        assertTrue(cc.hasValidCertificate("127.0.0.1", 636, false));
+    }
+    
+    @Test
+    public void connectToImapsAndLdapsHost() {
+        //ssh -L 636:intserv-new.net.t-labs.tu-berlin.de:636 -l aschuetze roadrunner.net.t-labs.tu-berlin.de
+        System.out.println("-- tcc - connectToImapsAndLdapsHost");
+        CertificateCheck cc = new CertificateCheck();
+        
+        assertFalse(cc.hasValidCertificate("www.google.de", 443, false));
+        assertTrue(cc.importCertificate("www.google.de", 443, false));
+        assertFalse(cc.importCertificate("www.google.de", 443, false));
+        assertTrue(cc.hasValidCertificate("www.google.de", 443, false));
+        
+        boolean ret = cc.hasValidCertificate("127.0.0.1", 636, false);
+        assertFalse(ret);
+        ret = cc.importCertificate("127.0.0.1", 636, false);
+        assertTrue(ret);
+        assertFalse(cc.importCertificate("127.0.0.1", 636, false));
+        assertTrue(cc.hasValidCertificate("127.0.0.1", 636, false));
+    }
+    
+    @Test
+    public void connectToHostWithNoCertificateImapCommon(){
+        System.out.println("-- tcc - connectToHostWithNoCertificateImapCommon");
+        //clearFile(pathToCertificateFile);
+        CertificateCheck cc = new CertificateCheck();
+        assertFalse(cc.hasValidCertificate("www.google.de", 443, false));
     }
     
     @Test
     public void connectToHostWithNoCertificateImapStarttls(){
-        clearFile(pathToCertificateFile);
+        System.out.println("-- tcc - connectToHostWithNoCertificateImapStarttls");
+        //clearFile(pathToCertificateFile);
         CertificateCheck cc = new CertificateCheck();
-        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143));
+        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143, false));
     }
     
     @Test
     public void importCertOfHostImapCommon(){
-        clearFile(pathToCertificateFile);
+        System.out.println("-- tcc - importCertOfHostImapCommon");
+        //clearFile(pathToCertificateFile);
         CertificateCheck cc = new CertificateCheck();
-        assertFalse(cc.hasValidCertificate("www.google.de", 443));
-        assertTrue(cc.importCertificate("www.google.de", 443));
-        assertFalse(cc.importCertificate("www.google.de", 443));
-        assertTrue(cc.hasValidCertificate("www.google.de", 443));
+        assertFalse(cc.hasValidCertificate("www.google.de", 443, false));
+        assertTrue(cc.importCertificate("www.google.de", 443, false));
+        assertFalse(cc.importCertificate("www.google.de", 443, false));
+        assertTrue(cc.hasValidCertificate("www.google.de", 443, false));
     }
     
     @Test
     public void importCertOfHostImapStarttls(){
-        clearFile(pathToCertificateFile);
+        System.out.println("-- tcc - importCertOfHostImapStarttls");
+        //clearFile(pathToCertificateFile);
         CertificateCheck cc = new CertificateCheck();
-        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143));
-        assertTrue(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143));
-        assertFalse(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143));
-        assertTrue(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143));
+        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertTrue(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertFalse(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertTrue(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
     }
 
     @Test
     public void testWithMoreThanOneCert(){
-        clearFile(pathToCertificateFile);
+        System.out.println("-- tcc - testWithMoreThanOneCert");
+        //clearFile(pathToCertificateFile);
         CertificateCheck cc = new CertificateCheck();
-        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143));
-        assertTrue(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143));
-        assertFalse(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143));
-        assertTrue(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143));
+        assertFalse(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertTrue(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertFalse(cc.importCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
+        assertTrue(cc.hasValidCertificate("mail.net.t-labs.tu-berlin.de.", 143, true));
         
-        assertFalse(cc.hasValidCertificate("www.google.de", 443));
-        assertTrue(cc.importCertificate("www.google.de", 443));
-        assertFalse(cc.importCertificate("www.google.de", 443));
-        assertTrue(cc.hasValidCertificate("www.google.de", 443));
+        assertFalse(cc.hasValidCertificate("www.google.de", 443, false));
+        assertTrue(cc.importCertificate("www.google.de", 443, false));
+        assertFalse(cc.importCertificate("www.google.de", 443, false));
+        assertTrue(cc.hasValidCertificate("www.google.de", 443, false));
         
-        assertFalse(cc.hasValidCertificate("imap.mail.yahoo.com", 993));
-        assertFalse(cc.hasValidCertificate("imap.web.de", 993));
-        assertTrue(cc.importCertificate("imap.mail.yahoo.com", 993));
-        assertTrue(cc.importCertificate("imap.web.de", 993));
-        assertFalse(cc.importCertificate("imap.mail.yahoo.com", 993));
-        assertFalse(cc.importCertificate("imap.web.de", 993));
-        assertTrue(cc.hasValidCertificate("imap.mail.yahoo.com", 993));
-        assertTrue(cc.hasValidCertificate("imap.web.de", 993));
+        assertFalse(cc.hasValidCertificate("imap.mail.yahoo.com", 993, false));
+        assertFalse(cc.hasValidCertificate("imap.web.de", 993, false));
+        assertTrue(cc.importCertificate("imap.mail.yahoo.com", 993, false));
+        assertTrue(cc.importCertificate("imap.web.de", 993, false));
+        assertFalse(cc.importCertificate("imap.mail.yahoo.com", 993, false));
+        assertFalse(cc.importCertificate("imap.web.de", 993, false));
+        assertTrue(cc.hasValidCertificate("imap.mail.yahoo.com", 993, false));
+        assertTrue(cc.hasValidCertificate("imap.web.de", 993, false));
     }
     
     @Test
     public void connectToHostWithExsistingCertificate() {
-        //System.out.println("ConnectToHostWithExsistingCertificate");
+        System.out.println("-- tcc - connectToHostWithExsistingCertificate");
         System.clearProperty("javax.net.ssl.keyStore");
         CertificateCheck cc = new CertificateCheck();
-        assertFalse(cc.hasValidCertificate("www.google.de", 443));
-        assertTrue(cc.importCertificate("www.google.de", 443));
-        assertTrue(cc.hasValidCertificate("www.google.de", 443));
+        assertTrue(cc.hasValidCertificate("www.google.de", 443, false));
+        assertFalse(cc.importCertificate("www.google.de", 443, false));
+        assertTrue(cc.hasValidCertificate("www.google.de", 443, false));
     }
+    
+    /* skip pop3 test - support follow later
+    @Test
+    public void importCertOfPop3Host() {
+        System.out.println("-- tcc - importCertOfPop3Host");
+        //clearFile(pathToCertificateFile);
+        CertificateCheck cc = new CertificateCheck();
+        assertFalse("perform certificate check with pop3 server",
+                cc.hasValidCertificate("pop3.web.de", 110, false));
+        assertFalse("perform certificate check with pop3 server using ",
+                cc.hasValidCertificate("pop3.web.de", 110, true));
+        assertTrue("import certificate of pop3 server",
+                cc.importCertificate("pop3.web.de", 110, false));
+    }
+    */
 }

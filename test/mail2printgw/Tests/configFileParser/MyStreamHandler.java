@@ -17,17 +17,22 @@
     * along with mail2printGW.  If not, see <http://www.gnu.org/licenses/>.
     */
 
-package mail2printgw;
+
+package mail2printgw.Tests.configFileParser;
+
+import mail2printgw.Tests.configFileParser.MyOutputStream;
+import java.io.OutputStream;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.StreamHandler;
 
 /**
  *
- * @author andre
+ * @author eddi
  */
-public class ImapAcc {
-    public String url = null;
-    public int    port = 0;
-    public String protocol = null;
-    public boolean useSTARTTLS = false;
-    public String username = null;
-    public String password = null;
+public class MyStreamHandler extends StreamHandler{
+    public MyStreamHandler(OutputStream out) {
+        MyOutputStream mos = new MyOutputStream();
+        mos.setOutputStream(out);
+        setOutputStream(mos);
+    }
 }

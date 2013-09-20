@@ -415,6 +415,7 @@ public class CertificateCheck {
                     "unable to set ssl/tls socket timeout", ex);
         }
         try {
+            //System.out.println("cc - start handshake");
             sslSocket.startHandshake();
             sslSocket.close();
             
@@ -422,10 +423,11 @@ public class CertificateCheck {
             
             this.certChain = tm.getChain();
             //System.out.println("cc - ssl/tls handshake work. certChain = " + certChain);
+            //System.out.println("cc - return true");
             return true;
         } catch (IOException ex) {
-            Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
-                    "unable to create ssl/tls socket", ex);
+            //Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE,
+            //        "unable to create ssl/tls socket", ex);
             //ex.printStackTrace();
             
             //an ssl/tls handshake does not work
@@ -436,8 +438,20 @@ public class CertificateCheck {
             //        "problem during SSL/TLS handshake to \"" + host +
             //        ":" + port + "\" occure. " + getCertificateError(), ex);
             
+            /*
+            try {
+                System.out.println("cc - num of certs instore: " + ks.size());
+            } catch (KeyStoreException ex1) {
+                Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex1);
+            }
+            */
+            
+            //System.out.println("cc - exeption occure: " + ex.getMessage());
+            
             this.certChain = tm.getChain();
-            //System.out.println("cc - ssl/tls handshake does not work. certChain = " + certChain);
+            
+            //System.out.println("cc - certChain.length = " + certChain.length);
+            //System.out.println("cc - return false");
             return false;
         }
     }
@@ -486,17 +500,22 @@ public class CertificateCheck {
         
         
         //get certificate number which should be stored
+        /*
         int k = 0;
         for(int j=0; k<chain.length; k++){
             if(certToStore.equals(chain[j])){
                 k=j;
                 break;
             }
+            if(certToStore == chain[j]) {
+                k=j;
+                break;
+            }
         }
+        */
         
         
-        
-        final String alias = host + "-" + (k + 1);
+        final String alias = host + "-" + certToStore.getSerialNumber();
         try {
             ks.setCertificateEntry(alias, certToStore);
             //System.out.println("5");
@@ -505,14 +524,19 @@ public class CertificateCheck {
             out.close();
         }catch (CertificateException ex) {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
         } catch (NoSuchAlgorithmException ex) {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
         } catch (KeyStoreException ex) {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
         } catch (FileNotFoundException ex) {
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
         } catch (IOException ex){
             Logger.getLogger(CertificateCheck.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
         }
         
         //System.out.println("Added certificate to keystore '" + certificateStoreFile.getName()
@@ -570,7 +594,7 @@ public class CertificateCheck {
         
         
         //search highest weight
-        int high = 0;
+        int high = -1;
         X509Certificate cert = null;
         for(int i=0; i<weights.length; i++){
             if(high<weights[i]){

@@ -19,26 +19,90 @@
 
 package mail2printgw;
 
+import java.io.File;
 import java.util.ArrayList;
 import javax.activation.MimeType;
+//import org.apache.pdfbox.pdmodel.PDDocument;
 
 /**
  *
  * @author andre
  */
 public class PrintItem {
-    private ArrayList<String> senders = null;
+    private ArrayList<String> from = null;
+    private String printer = null;
+    private String pathToAttachmentFile = null;
+    private String pathToPrintFile = null;
+    private MimeType mime = null;
+    /*
+    private int itemNr = -1;
+    private String fileName = null;
+    private PDDocument doc = null;
+    */
+
+    public void setFrom(ArrayList<String> parm) {
+        from = parm;
+    }
+    public ArrayList<String> getFrom() {
+        return from;
+    }
     
-    public PrintItem(ArrayList<String> senders){
-        this.senders = senders;
+    public void setFilePath(String path) {
+        this.pathToAttachmentFile = path;
+    }
+    public void setFilePathToPrintFile(String path) {
+        this.pathToPrintFile = path;
+    }
+    public void attachedFileToPrintFile() {
+        pathToPrintFile = pathToAttachmentFile;
+    }
+    public String getPathToPrintFile() {
+        return pathToPrintFile;
+    }
+    public String getPathToAttachmentFile() {
+        return pathToAttachmentFile;
+    }
+    
+    public void setPrinter(String pr) {
+        printer = pr;
+    }
+    public String getPrinter() {
+        return printer;
+    }
+    
+    public void setMime(MimeType m) {
+        mime = m;
+    }
+    public MimeType getMime() {
+        return mime;
     }
     
     public static boolean mimePrintable(MimeType mime){
-        for(MimeType actMime : ConfigFileParser.getInstance().getPrintableMimes()){
+        ArrayList<MimeType> mimes = ConfigFileParser.getInstance().getPrintableMimes();
+        if(mimes == null) {
+            return false;
+        }
+        for(MimeType actMime : mimes){
             if(actMime.match(mime)){
                 return true;
             }
         }
         return false;
+    }
+    
+    public String getInformation() {
+        String ret = "from: ";
+        for(String f : from) {
+            ret += f + "; ";
+        }
+        
+        ret += "\nprinter: " + printer;
+        
+        ret += "\npath: " + pathToAttachmentFile;
+        
+        File f = new File(pathToAttachmentFile);
+        ret += "\nfile-length: " + f.length();
+        
+        return ret;
     }
 }
